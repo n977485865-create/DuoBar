@@ -1,7 +1,6 @@
 import AppKit
 import ServiceManagement
 import CoreLocation
-import Intents
 
 final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     private let preferences: DotPreferences
@@ -69,12 +68,12 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         focusStatus.textColor = .secondaryLabelColor
         stack.addArrangedSubview(focusStatus)
         let actions = NSStackView(views: [
-            button("允许读取专注状态…", #selector(explainFocus)),
+            button("连接专注模式…", #selector(explainFocus)),
             button("允许显示 Wi-Fi 名称…", #selector(requestLocation))
         ])
         actions.spacing = 8
         stack.addArrangedSubview(actions)
-        stack.addArrangedSubview(note("Wi-Fi 名称需定位权限，应用不请求地理坐标。专注状态未共享时，圆点保持灰色，详情标注未共享。"))
+        stack.addArrangedSubview(note("Wi-Fi 名称需定位权限，应用不请求地理坐标。专注圆点只跟随已添加 DuoBar 过滤条件的模式。"))
         addSeparator(stack)
         stack.addArrangedSubview(heading("联系开发者 🌟"))
         stack.addArrangedSubview(contactRow("小红书：", title: "一键前往", action: #selector(openXiaohongshu)))
@@ -166,8 +165,8 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         icon.layout = preferences.layout
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         switch status.focus {
-        case .unavailable: focusStatus.stringValue = "点击下方按钮并在系统弹窗中允许读取。还需在系统设置中开启“共享专注状态”。"
-        default: focusStatus.stringValue = "专注状态可读 · " + status.focus.title
+        case .unavailable(let reason): focusStatus.stringValue = reason
+        default: focusStatus.stringValue = "专注过滤条件 · " + status.focus.title
         }
     }
     func present(status: SystemStatus) {
@@ -208,18 +207,6 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     }
 
     @objc private func explainFocus() {
-        let center = INFocusStatusCenter.default
-        if center.authorizationStatus == .denied || center.authorizationStatus == .restricted {
-            let alert = NSAlert()
-            alert.messageText = "专注状态尚未共享"
-            alert.informativeText = "请在系统设置中允许 DuoBar 读取专注状态，并在专注模式 → 专注状态中开启共享。DuoBar 只读取是否专注，开启时点亮圆点。"
-            alert.addButton(withTitle: "打开专注设置")
-            alert.addButton(withTitle: "稍后")
-            if alert.runModal() == .alertFirstButtonReturn { SystemSettings.open(.focus) }
-            return
-        }
-        center.requestAuthorization { [weak self] _ in
-            DispatchQueue.main.async { self?.onRefresh?() }
-        }
+        SystemSettings.open(.focus)
     }
 }

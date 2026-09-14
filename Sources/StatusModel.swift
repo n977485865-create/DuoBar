@@ -9,14 +9,10 @@ enum FocusState: Equatable {
         switch self {
         case .off: return "未开启"
         case .active: return "已开启"
-        case .unavailable: return "状态未共享"
+        case .unavailable: return "未连接"
         }
     }
     var symbol: String { isActive ? "moon.fill" : "moon" }
-    static func shared(_ value: Bool?) -> FocusState {
-        guard let value else { return .unavailable("系统尚未共享专注状态") }
-        return value ? .active : .off
-    }
 }
 
 struct BatteryState: Equatable {

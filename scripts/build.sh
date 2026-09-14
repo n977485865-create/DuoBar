@@ -6,19 +6,17 @@ mkdir -p "$DUOBAR_BUILD"
 DUOBAR_STAGE=$(mktemp -d "$DUOBAR_BUILD/app-stage.XXXXXX")
 trap 'rm -rf "$DUOBAR_STAGE"' EXIT
 DUOBAR_APP="$DUOBAR_STAGE/DuoBar.app"
-DUOBAR_SDK="$(xcrun --show-sdk-path)"
-mkdir -p "$DUOBAR_APP/Contents/MacOS" "$DUOBAR_APP/Contents/Resources" "$DUOBAR_BUILD/module-cache" "$DUOBAR_BUILD/bin"
-for DUOBAR_ARCH in arm64 x86_64; do
-    xcrun swiftc -O -whole-module-optimization -swift-version 5 \
-        -target "$DUOBAR_ARCH-apple-macosx13.0" -sdk "$DUOBAR_SDK" \
-        -module-cache-path "$DUOBAR_BUILD/module-cache" \
-        -framework AppKit -framework CoreWLAN -framework CoreAudio -framework IOKit \
-        -framework Intents -framework Network -framework SystemConfiguration -framework ServiceManagement -framework CoreLocation \
-        "$DUOBAR_ROOT"/Sources/*.swift -o "$DUOBAR_BUILD/bin/DuoBar-$DUOBAR_ARCH"
-done
-xcrun lipo -create "$DUOBAR_BUILD/bin/DuoBar-arm64" "$DUOBAR_BUILD/bin/DuoBar-x86_64" -output "$DUOBAR_APP/Contents/MacOS/DuoBar"
-cp -X "$DUOBAR_ROOT/Resources/Info.plist" "$DUOBAR_APP/Contents/Info.plist"
-cp -X "$DUOBAR_ROOT/Resources/AppIcon.icns" "$DUOBAR_APP/Contents/Resources/AppIcon.icns"
+# Xcode generates the App Intents metadata that makes DuoBar appear among
+# macOS Focus filters. A swiftc-only app can compile but cannot be configured.
+if ! xcrun --find appintentsmetadataprocessor >/dev/null 2>&1; then
+    print -u2 'Full Xcode is required to build the Focus filter. Command Line Tools alone are insufficient.'
+    exit 1
+fi
+xcodebuild -quiet -project "$DUOBAR_ROOT/DuoBar.xcodeproj" -target DuoBar \
+    -configuration Release -sdk macosx \
+    CONFIGURATION_BUILD_DIR="$DUOBAR_STAGE" \
+    OBJROOT="$DUOBAR_BUILD/xcode-intermediates" \
+    SYMROOT="$DUOBAR_BUILD/xcode-products" CODE_SIGNING_ALLOWED=NO
 /usr/bin/plutil -lint "$DUOBAR_APP/Contents/Info.plist"
 /usr/bin/codesign --force --sign - "$DUOBAR_APP"
 "$DUOBAR_ROOT/scripts/verify-app.sh" "$DUOBAR_APP"

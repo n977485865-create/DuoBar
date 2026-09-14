@@ -14,6 +14,11 @@ jobs:
       - name: Build Apple Silicon and Intel app
         run: ./scripts/build.sh
       - name: Verify universal binary and signature
-        run: |
-          lipo build/DuoBar.app/Contents/MacOS/DuoBar -verify_arch arm64 x86_64
-          codesign --verify --deep --strict build/DuoBar.app
+        run: ./scripts/verify-app.sh build/DuoBar.app
+      - name: Prepare installable validation app
+        run: ditto -c -k --norsrc --noextattr --noacl --keepParent build/DuoBar.app build/DuoBar-validation.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DuoBar-validation
+          path: build/DuoBar-validation.zip
+          retention-days: 7

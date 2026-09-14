@@ -1,5 +1,4 @@
 import AppKit
-import Intents
 import CoreAudio
 import CoreWLAN
 import IOKit.ps
@@ -81,14 +80,6 @@ enum SystemReaders {
         }
         state.names.sort()
         return state
-    }
-
-    static func focus() -> FocusState {
-        let center = INFocusStatusCenter.default
-        guard center.authorizationStatus == .authorized else {
-            return .unavailable("在 DuoBar 设置中允许读取专注状态。仅读取是否专注，不区分具体模式。")
-        }
-        return .shared(center.focusStatus.isFocused)
     }
 
     static func audio() -> AudioState {

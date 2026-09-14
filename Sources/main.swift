@@ -1,6 +1,5 @@
 import AppKit
 import ServiceManagement
-import Intents
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var item: NSStatusItem!
@@ -53,13 +52,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if firstLaunch || CommandLine.arguments.contains("--settings") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.showSettings() }
         }
-        if CommandLine.arguments.contains("--request-focus") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                INFocusStatusCenter.default.requestAuthorization { [weak self] _ in
-                    DispatchQueue.main.async { self?.monitor.refresh() }
-                }
-            }
-        }
         if CommandLine.arguments.contains("--open-menu") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.item.button?.performClick(nil) }
         }
@@ -102,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 if CommandLine.arguments.contains("--diagnose") {
     let status = SystemStatus(battery: SystemReaders.battery(),
                               wifi: SystemReaders.wifi(client: .shared(), route: .unknown),
-                              vpn: SystemReaders.vpn(), audio: SystemReaders.audio(), focus: SystemReaders.focus())
+                              vpn: SystemReaders.vpn(), audio: SystemReaders.audio())
     let report: [String: Any] = [
         "batteryPresent": status.battery.present,
         "batteryCharging": status.battery.charging,
@@ -119,9 +111,7 @@ if CommandLine.arguments.contains("--diagnose") {
         "headphoneCount": status.audio.headphoneNames.count,
         "muteAvailable": status.audio.muted != nil,
         "muted": status.audio.muted as Any? ?? NSNull(),
-        "focus": status.focus.title,
-        "focusAuthorization": INFocusStatusCenter.default.authorizationStatus.rawValue,
-        "focusSharedValue": INFocusStatusCenter.default.focusStatus.isFocused as Any? ?? NSNull(),
+        "focus": "请在运行中的 DuoBar 查看实时专注过滤条件状态",
         "activeGlyphCount": status.glyphs.count,
         "loginItemStatus": SMAppService.mainApp.status.rawValue
     ]

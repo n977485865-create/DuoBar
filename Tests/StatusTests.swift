@@ -23,10 +23,6 @@ struct StatusTests {
         unknown.focus = .unavailable("denied")
         check(unknown.glyphs.isEmpty, "unknown states and ordinary tunnels never become active badges")
         check(!unknown.vpn.active, "utun is not VPN evidence")
-        check(FocusState.shared(true) == .active, "shared focus on becomes moon")
-        check(FocusState.shared(false) == .off, "shared focus off leaves its dot inactive")
-        if case .unavailable = FocusState.shared(nil) { check(true, "unshared focus stays unknown") }
-        else { check(false, "unshared focus must not become off") }
         check(SystemStatus.preview().glyphs == [.vpn, .headphones, .mute, .focus], "four active states in consistent order")
         check(DotLayout().visible == StatusGlyph.allCases, "all four dots stay visible when inactive")
         let normalized = DotLayout(order: [.focus, .focus, .vpn])

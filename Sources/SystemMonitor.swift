@@ -1,5 +1,4 @@
 import AppKit
-import Intents
 import CoreAudio
 import CoreWLAN
 import IOKit.ps
@@ -19,7 +18,6 @@ final class SystemMonitor: NSObject, CWEventDelegate {
     private var dynamicStore: SCDynamicStore?
     private var observers: [NSObjectProtocol] = []
     private var audioListeners: [(AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
-    private var focusObservation: NSKeyValueObservation?
     private var watchedOutput: AudioDeviceID?
     private var sampling = false
     private var needsAnotherSample = false
@@ -71,10 +69,10 @@ final class SystemMonitor: NSObject, CWEventDelegate {
         observers.append(nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.sleeping = false; self?.resetTimer(); self?.refresh()
         })
-        focusObservation = INFocusStatusCenter.default.observe(\.focusStatus, options: [.new]) { [weak self] _, _ in
-            self?.refreshFocus()
-        }
+        observers.append(NotificationCenter.default.addObserver(forName: FocusFilterReader.didChange,
+            object: nil, queue: .main) { [weak self] _ in self?.updateFocus() })
         resetTimer()
+        refreshFocus()
         refresh()
     }
 
@@ -103,19 +101,21 @@ final class SystemMonitor: NSObject, CWEventDelegate {
     private func refreshFocus() {
         guard Thread.isMainThread else { DispatchQueue.main.async { self.refreshFocus() }; return }
         guard !sleeping else { return }
-        worker.async { [weak self] in
-            let focus = SystemReaders.focus()
-            DispatchQueue.main.async {
-                guard let self, !self.sleeping, self.status.focus != focus else { return }
-                self.status.focus = focus
-                self.onChange?(self.status)
-            }
-        }
+        MainActor.assumeIsolated { FocusFilterReader.refresh() }
+    }
+
+    private func updateFocus() {
+        guard !sleeping else { return }
+        let focus = MainActor.assumeIsolated { FocusFilterReader.state }
+        guard status.focus != focus else { return }
+        status.focus = focus
+        onChange?(status)
     }
 
     func refresh() {
         guard Thread.isMainThread else { DispatchQueue.main.async { self.refresh() }; return }
         guard !sleeping else { return }
+        refreshFocus()
         if sampling { needsAnotherSample = true; return }
         sampling = true
         let route = self.route
@@ -126,10 +126,10 @@ final class SystemMonitor: NSObject, CWEventDelegate {
             value.wifi = SystemReaders.wifi(client: self.wifi, route: route)
             value.vpn = SystemReaders.vpn()
             value.audio = SystemReaders.audio()
-            value.focus = SystemReaders.focus()
             DispatchQueue.main.async {
                 self.sampling = false
                 self.bindOutput()
+                value.focus = FocusFilterReader.state
                 if value != self.status {
                     self.status = value
                     self.onChange?(value)
@@ -182,7 +182,6 @@ final class SystemMonitor: NSObject, CWEventDelegate {
             var address = original
             AudioObjectRemovePropertyListenerBlock(object, &address, .main, block)
         }
-        focusObservation?.invalidate()
         observers.forEach {
             NotificationCenter.default.removeObserver($0)
             NSWorkspace.shared.notificationCenter.removeObserver($0)
