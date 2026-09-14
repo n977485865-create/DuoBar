@@ -166,7 +166,11 @@ final class StatusPanel: NSView {
                      title: "声音", value: state.audio.soundTitle)
         sound.toolTip = state.audio.outputName + " · " + state.audio.soundTitle
         focus.update(symbol: state.focus.symbol, title: "专注", value: state.focus.title, active: state.focus.isActive)
-        if case .unavailable(let reason) = state.focus { focus.toolTip = reason }
+        switch state.focus {
+        case .unavailable(let reason): focus.toolTip = reason
+        case .active: focus.toolTip = "已绑定的专注模式正在开启。"
+        case .off: focus.toolTip = "已绑定的专注模式未开启；未绑定的模式不会点亮此圆点。"
+        }
     }
 }
 

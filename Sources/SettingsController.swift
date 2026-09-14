@@ -66,9 +66,15 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         stack.addArrangedSubview(heading("状态读取"))
         focusStatus.font = .systemFont(ofSize: 12)
         focusStatus.textColor = .secondaryLabelColor
+        focusStatus.preferredMaxLayoutWidth = 444
         stack.addArrangedSubview(focusStatus)
+        let focusAction = button("连接专注模式…", #selector(explainFocus))
+        if !FocusFilterReader.hasDeveloperSignature {
+            focusAction.title = "专注联动暂不可用"
+            focusAction.isEnabled = false
+        }
         let actions = NSStackView(views: [
-            button("连接专注模式…", #selector(explainFocus)),
+            focusAction,
             button("允许显示 Wi-Fi 名称…", #selector(requestLocation))
         ])
         actions.spacing = 8

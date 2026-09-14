@@ -22,6 +22,12 @@ struct FocusFilterTests {
         FocusFilterReader.apply(.unavailable(FocusFilterReader.setupHint))
         precondition(!FocusFilterReader.state.isActive, "Unavailable state must never look active")
         precondition(FocusFilterReader.state != .off, "Not configured must remain distinct from off")
-        print("PASS: native Focus intent activation, deactivation, reactivation and unavailable state")
+        if !FocusFilterReader.hasDeveloperSignature {
+            FocusFilterReader.apply(.active)
+            FocusFilterReader.refresh()
+            precondition(FocusFilterReader.state == .unavailable(FocusFilterReader.signingHint),
+                         "An unsigned build must report unavailable, never a false OFF reading")
+        }
+        print("PASS: native Focus intent callbacks and unavailable state for missing signing identity")
     }
 }
