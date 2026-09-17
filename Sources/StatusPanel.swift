@@ -166,7 +166,7 @@ final class StatusPanel: NSView {
                      title: "声音", value: state.audio.soundTitle)
         sound.toolTip = state.audio.outputName + " · " + state.audio.soundTitle
         focus.update(symbol: state.focus.symbol, title: "专注", value: state.focus.title, active: state.focus.isActive)
-        if case .unavailable(let reason) = state.focus { focus.toolTip = reason }
+        focus.toolTip = state.focus.detail
     }
 }
 

@@ -55,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if CommandLine.arguments.contains("--request-focus") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                guard FocusReader.read().authorizationAction == .request else { return }
                 INFocusStatusCenter.default.requestAuthorization { [weak self] _ in
                     DispatchQueue.main.async { self?.monitor.refresh() }
                 }
@@ -100,10 +101,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 }
 
 if CommandLine.arguments.contains("--diagnose") {
+    let focus = FocusReader.read()
     let status = SystemStatus(battery: SystemReaders.battery(),
                               wifi: SystemReaders.wifi(client: .shared(), route: .unknown),
-                              vpn: SystemReaders.vpn(), audio: SystemReaders.audio(), focus: SystemReaders.focus())
-    let report: [String: Any] = [
+                              vpn: SystemReaders.vpn(), audio: SystemReaders.audio(), focus: focus.state)
+    var report: [String: Any] = [
+        "context": "commandLine",
         "batteryPresent": status.battery.present,
         "batteryCharging": status.battery.charging,
         "lowPowerMode": status.battery.lowPowerMode,
@@ -119,12 +122,10 @@ if CommandLine.arguments.contains("--diagnose") {
         "headphoneCount": status.audio.headphoneNames.count,
         "muteAvailable": status.audio.muted != nil,
         "muted": status.audio.muted as Any? ?? NSNull(),
-        "focus": status.focus.title,
-        "focusAuthorization": INFocusStatusCenter.default.authorizationStatus.rawValue,
-        "focusSharedValue": INFocusStatusCenter.default.focusStatus.isFocused as Any? ?? NSNull(),
         "activeGlyphCount": status.glyphs.count,
         "loginItemStatus": SMAppService.mainApp.status.rawValue
     ]
+    report.merge(focus.diagnosticFields) { _, new in new }
     let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
     print(String(data: data, encoding: .utf8)!)
 } else {
