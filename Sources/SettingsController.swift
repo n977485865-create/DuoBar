@@ -8,6 +8,8 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
     private let dotRows = NSStackView()
     private let login = NSButton(checkboxWithTitle: "登录时自动启动", target: nil, action: nil)
     private let focusStatus = NSTextField(wrappingLabelWithString: "")
+    private let focusAuthorizationButton = NSButton()
+    private let focusDiagnosticsButton = NSButton()
     private let location = CLLocationManager()
     private let icon = LargeIconView()
     private let wechatCopied = NSTextField(labelWithString: "")
@@ -68,13 +70,24 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         focusStatus.font = .systemFont(ofSize: 12)
         focusStatus.textColor = .secondaryLabelColor
         stack.addArrangedSubview(focusStatus)
+        focusStatus.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        focusAuthorizationButton.title = "允许读取专注状态…"
+        focusAuthorizationButton.target = self
+        focusAuthorizationButton.action = #selector(explainFocus)
+        focusDiagnosticsButton.title = "专注诊断…"
+        focusDiagnosticsButton.target = self
+        focusDiagnosticsButton.action = #selector(showFocusDiagnostics)
+        for control in [focusAuthorizationButton, focusDiagnosticsButton] {
+            control.bezelStyle = .rounded; control.controlSize = .small
+        }
         let actions = NSStackView(views: [
-            button("允许读取专注状态…", #selector(explainFocus)),
-            button("允许显示 Wi-Fi 名称…", #selector(requestLocation))
+            focusAuthorizationButton,
+            button("允许显示 Wi-Fi 名称…", #selector(requestLocation)),
+            focusDiagnosticsButton
         ])
         actions.spacing = 8
         stack.addArrangedSubview(actions)
-        stack.addArrangedSubview(note("Wi-Fi 名称需定位权限，应用不请求地理坐标。专注状态未共享时，圆点保持灰色，详情标注未共享。"))
+        stack.addArrangedSubview(note("Wi-Fi 名称需定位权限，应用不请求地理坐标。专注圆点仅在系统向此应用报告通知静音时点亮。"))
         addSeparator(stack)
         stack.addArrangedSubview(heading("联系开发者 🌟"))
         stack.addArrangedSubview(contactRow("小红书：", title: "一键前往", action: #selector(openXiaohongshu)))
@@ -165,10 +178,8 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
         icon.status = status
         icon.layout = preferences.layout
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        switch status.focus {
-        case .unavailable: focusStatus.stringValue = "点击下方按钮并在系统弹窗中允许读取。还需在系统设置中开启“共享专注状态”。"
-        default: focusStatus.stringValue = "专注状态可读 · " + status.focus.title
-        }
+        focusStatus.stringValue = status.focus.title + " · " + status.focus.detail
+        focusAuthorizationButton.title = status.focus.authorizationButtonTitle
     }
     func present(status: SystemStatus) {
         update(status)
@@ -209,17 +220,64 @@ final class SettingsController: NSWindowController, CLLocationManagerDelegate {
 
     @objc private func explainFocus() {
         let center = INFocusStatusCenter.default
-        if center.authorizationStatus == .denied || center.authorizationStatus == .restricted {
+        let reading = FocusReader.read(from: center)
+        switch reading.authorizationAction {
+        case .request:
+            center.requestAuthorization { [weak self] _ in
+                DispatchQueue.main.async { self?.onRefresh?() }
+            }
+        case .refresh:
+            onRefresh?()
+        case .openSettings, .explainRestriction, .explainUnknown:
             let alert = NSAlert()
-            alert.messageText = "专注状态尚未共享"
-            alert.informativeText = "请在系统设置中允许 DuoBar 读取专注状态，并在专注模式 → 专注状态中开启共享。DuoBar 只读取是否专注，开启时点亮圆点。"
-            alert.addButton(withTitle: "打开专注设置")
-            alert.addButton(withTitle: "稍后")
-            if alert.runModal() == .alertFirstButtonReturn { SystemSettings.open(.focus) }
-            return
+            alert.messageText = reading.state.title
+            alert.informativeText = reading.state.detail
+            if reading.authorizationAction == .openSettings {
+                alert.addButton(withTitle: "打开专注设置")
+                alert.addButton(withTitle: "稍后")
+                if alert.runModal() == .alertFirstButtonReturn { SystemSettings.open(.focus) }
+            } else {
+                alert.addButton(withTitle: "好")
+                alert.runModal()
+            }
         }
-        center.requestAuthorization { [weak self] _ in
-            DispatchQueue.main.async { self?.onRefresh?() }
+    }
+
+    @objc private func showFocusDiagnostics() {
+        focusDiagnosticsButton.isEnabled = false
+        FocusDiagnostics.capture { [weak self] result in
+            guard let self else { return }
+            self.focusDiagnosticsButton.isEnabled = true
+            guard let window = self.window, window.isVisible else { return }
+            let alert = NSAlert()
+            alert.messageText = "专注状态诊断"
+            switch result {
+            case .failure(let error):
+                alert.informativeText = error.localizedDescription
+                alert.addButton(withTitle: "关闭")
+                alert.beginSheetModal(for: window)
+            case .success(let json):
+                alert.informativeText = "当前 DuoBar 进程的权限与共享状态，不包含具体专注模式名称。"
+                let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 420, height: 240))
+                let text = NSTextView(frame: scroll.bounds)
+                text.isEditable = false
+                text.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+                text.textColor = .textColor
+                text.string = json
+                text.isVerticallyResizable = true
+                text.textContainer?.widthTracksTextView = true
+                scroll.documentView = text
+                scroll.hasVerticalScroller = true
+                alert.accessoryView = scroll
+                alert.addButton(withTitle: "复制诊断")
+                alert.addButton(withTitle: "关闭")
+                alert.beginSheetModal(for: window) { response in
+                    if response == .alertFirstButtonReturn {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(json, forType: .string)
+                    }
+                }
+            }
         }
     }
 }

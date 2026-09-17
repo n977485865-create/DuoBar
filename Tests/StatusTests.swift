@@ -20,7 +20,7 @@ struct StatusTests {
         var unknown = SystemStatus()
         unknown.vpn.hasUnidentifiedTunnel = true
         unknown.audio.muted = nil
-        unknown.focus = .unavailable("denied")
+        unknown.focus = .unavailable(.denied)
         check(unknown.glyphs.isEmpty, "unknown states and ordinary tunnels never become active badges")
         check(!unknown.vpn.active, "utun is not VPN evidence")
         check(FocusState.shared(true) == .active, "shared focus on becomes moon")

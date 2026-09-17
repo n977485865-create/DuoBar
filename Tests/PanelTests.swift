@@ -37,6 +37,16 @@ import AppKit
         check(SystemSettings.Page.bluetooth.url.absoluteString == "x-apple.systempreferences:com.apple.BluetoothSettings", "headphones target Bluetooth settings")
         check(SystemSettings.Page.allCases.allSatisfy { $0.url.scheme == "x-apple.systempreferences" },
               "settings links stay within the system settings application")
+        let focusRow = rows.first { $0.destination == .focus }!
+        var focusState = SystemStatus()
+        focusState.focus = .unavailable(.denied)
+        panel.update(focusState)
+        check(focusRow.toolTip == focusState.focus.detail, "Focus row explains the actual permission failure")
+        focusState.focus = .off
+        panel.update(focusState)
+        check(focusRow.toolTip == focusState.focus.detail, "a readable Focus report clears the old failure tooltip")
+        check(descendants(focusRow).compactMap { $0 as? NSTextField }.contains { $0.stringValue == "未报告静音" },
+              "Focus false is not presented as the system switch being off")
         print("PASS: five native settings actions, read-only VPN, accessibility and network routing")
     }
 }

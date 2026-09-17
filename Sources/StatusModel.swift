@@ -1,20 +1,63 @@
 import Foundation
 
 enum FocusState: Equatable {
+    enum UnavailableReason: Equatable {
+        case loading, notDetermined, denied, restricted, noSharedValue, unknownAuthorization
+
+        var title: String {
+            switch self {
+            case .loading: return "读取中"
+            case .notDetermined: return "尚未授权"
+            case .denied: return "授权被拒绝"
+            case .restricted: return "访问受限制"
+            case .noSharedValue: return "共享状态不可用"
+            case .unknownAuthorization: return "授权状态未知"
+            }
+        }
+
+        var detail: String {
+            switch self {
+            case .loading: return "正在读取专注共享状态。"
+            case .notDetermined: return "尚未请求专注状态授权，请点击下方按钮选择是否允许读取。"
+            case .denied: return "DuoBar 的专注状态授权被拒绝，请在系统设置中检查授权。"
+            case .restricted: return "系统限制 DuoBar 访问专注状态，重新请求授权无法解除此限制。"
+            case .noSharedValue: return "已获得专注状态授权，但系统未返回可用的共享状态。可检查共享设置或查看专注诊断。"
+            case .unknownAuthorization: return "系统返回了无法识别的授权状态，请查看专注诊断。"
+            }
+        }
+    }
+
+    // These cases describe the shared notification-silencing report, not a global Focus switch.
     case off
     case active
-    case unavailable(String)
+    case unavailable(UnavailableReason)
     var isActive: Bool { self == .active }
     var title: String {
         switch self {
-        case .off: return "未开启"
-        case .active: return "已开启"
-        case .unavailable: return "状态未共享"
+        case .off: return "未报告静音"
+        case .active: return "已报告静音"
+        case .unavailable(let reason): return reason.title
+        }
+    }
+    var detail: String {
+        switch self {
+        case .off: return "系统未向 DuoBar 报告通知静音；这不代表所有专注模式都已关闭。"
+        case .active: return "系统向 DuoBar 报告了通知静音状态，不包含具体的专注模式。"
+        case .unavailable(let reason): return reason.detail
+        }
+    }
+    var authorizationButtonTitle: String {
+        switch self {
+        case .unavailable(.notDetermined): return "允许读取专注状态…"
+        case .unavailable(.denied): return "检查专注授权…"
+        case .unavailable(.restricted): return "查看访问限制…"
+        case .unavailable(.unknownAuthorization): return "查看授权状态…"
+        default: return "刷新专注状态"
         }
     }
     var symbol: String { isActive ? "moon.fill" : "moon" }
     static func shared(_ value: Bool?) -> FocusState {
-        guard let value else { return .unavailable("系统尚未共享专注状态") }
+        guard let value else { return .unavailable(.noSharedValue) }
         return value ? .active : .off
     }
 }
@@ -142,7 +185,7 @@ enum StatusGlyph: String, CaseIterable {
         case .vpn: return "VPN 已连接"
         case .headphones: return "耳机已连接"
         case .mute: return "已静音"
-        case .focus: return "专注已开启"
+        case .focus: return "专注共享状态：已报告通知静音"
         }
     }
 }
@@ -152,7 +195,7 @@ struct SystemStatus: Equatable {
     var wifi = WiFiState()
     var vpn = VPNState()
     var audio = AudioState()
-    var focus: FocusState = .unavailable("需要读取系统专注状态")
+    var focus: FocusState = .unavailable(.loading)
     var glyphs: [StatusGlyph] {
         var items: [StatusGlyph] = []
         if vpn.active { items.append(.vpn) }
